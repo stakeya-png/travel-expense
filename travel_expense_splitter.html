@@ -105,6 +105,18 @@
   .card-body { margin-top: 12px; }
   .card-body.hidden { display: none; }
 
+  /* URL共有バー */
+  .url-bar {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface2); border: 0.5px solid var(--border);
+    border-radius: var(--radius-sm); padding: 8px 12px;
+    margin-bottom: 1rem;
+  }
+  .url-bar-text {
+    font-size: 12px; color: var(--text-muted); flex: 1;
+    overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  }
+
   /* danger zone at bottom */
   .danger-zone {
     margin-top: 2rem; padding: 1rem 1.25rem;
@@ -190,6 +202,11 @@
   .divider { border: none; border-top: 0.5px solid var(--border); margin: 10px 0; }
   .add-member-row { display: flex; gap: 6px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
 
+  /* ランディングページ */
+  .landing-hero { text-align: center; padding: 2rem 0 1.5rem; }
+  .landing-hero h1 { font-size: 28px; margin-bottom: 8px; }
+  .landing-hero p { font-size: 14px; color: var(--text-muted); }
+
   @media (max-width: 480px) {
     .summary-grid { grid-template-columns: repeat(2, 1fr); }
     .toggle button { padding: 0 6px; font-size: 12px; }
@@ -197,9 +214,40 @@
 </style>
 </head>
 <body>
-<div class="max-w">
-  <h1>旅行精算</h1>
-  <p class="subtitle">家族単位で支払いを記録・最小送金で精算　<span id="sync-status" style="font-size:12px">読み込み中...</span></p>
+
+<!-- ランディングページ（trip パラメータなしのとき表示） -->
+<div id="landing" class="max-w" style="display:none">
+  <div class="landing-hero">
+    <h1>旅行精算</h1>
+    <p>旅行ごとに専用URLを発行してグループで共有</p>
+  </div>
+
+  <div class="card">
+    <div class="card-title">新しい旅行を作成</div>
+    <div class="row">
+      <input type="text" id="new-trip-name" placeholder="旅行名（例：ハワイ旅行2025）"
+             onkeydown="if(event.key==='Enter')createNewTrip()">
+      <button class="btn btn-primary" onclick="createNewTrip()">作成</button>
+    </div>
+    <p style="font-size:12px;color:var(--text-hint);margin-top:6px">
+      作成後に表示されるURLをメンバーに共有してください
+    </p>
+  </div>
+</div>
+
+<!-- メインアプリ（trip パラメータありのとき表示） -->
+<div id="app" class="max-w" style="display:none">
+  <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px">
+    <h1 id="trip-title">旅行精算</h1>
+    <span id="sync-status" style="font-size:12px;color:var(--text-muted)">読み込み中...</span>
+  </div>
+  <p class="subtitle">家族単位で支払いを記録・最小送金で精算</p>
+
+  <!-- URL共有バー -->
+  <div class="url-bar">
+    <span class="url-bar-text" id="url-bar-text"></span>
+    <button class="btn btn-sm" id="copy-url-btn" onclick="copyTripUrl()">URLをコピー</button>
+  </div>
 
   <!-- 設定 -->
   <div class="card">
@@ -208,7 +256,15 @@
       <span class="chevron">▼</span>
     </div>
     <div class="card-body hidden" id="body-settings">
-      <div class="rate-row">
+      <div style="margin-bottom:10px">
+        <div class="section-label">旅行名</div>
+        <div class="row">
+          <input type="text" id="trip-name-input" placeholder="旅行名">
+          <button class="btn" onclick="saveTripName()">変更</button>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="rate-row" style="margin-top:10px">
         <span class="rate-label">1 USD =</span>
         <input type="number" id="rate" value="160" min="1" style="max-width:90px" oninput="render()">
         <span class="rate-label">円　　表示：</span>
@@ -309,6 +365,42 @@
 </div>
 
 <script>
+// ---------- trip routing ----------
+const TRIP_ID = new URLSearchParams(window.location.search).get('trip');
+const STORAGE_KEY = 'travel_expense_v1_' + (TRIP_ID || '_x');
+
+if (TRIP_ID) {
+  document.getElementById('app').style.display = '';
+  document.getElementById('url-bar-text').textContent = window.location.href;
+} else {
+  document.getElementById('landing').style.display = '';
+}
+
+function createNewTrip() {
+  const name = document.getElementById('new-trip-name').value.trim();
+  if (!name) { alert('旅行名を入力してください'); return; }
+  const id = Math.random().toString(36).substr(2, 8);
+  sessionStorage.setItem('trip_name_' + id, name);
+  window.location.href = window.location.pathname + '?trip=' + id;
+}
+
+function copyTripUrl() {
+  const url = window.location.href;
+  const btn = document.getElementById('copy-url-btn');
+  const done = () => {
+    btn.textContent = 'コピーしました ✓';
+    setTimeout(() => { btn.textContent = 'URLをコピー'; }, 2000);
+  };
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(done);
+  } else {
+    const inp = document.createElement('input');
+    inp.value = url; document.body.appendChild(inp);
+    inp.select(); document.execCommand('copy');
+    document.body.removeChild(inp); done();
+  }
+}
+
 // ---------- collapsible cards ----------
 function toggleCard(id) {
   const body = document.getElementById('body-' + id);
@@ -322,20 +414,20 @@ function toggleCard(id) {
 const RATIOS = { adult: 10, teen: 7, child: 5 };
 const CAT_LABEL = { adult: '大人', teen: '中高ノンアル', child: 'こども' };
 
-let families = [];   // [{id, name, members:[{id,name,cat}]}]
-let expenses = [];   // [{desc,amountJPY,payerMemberId,participants:[memberId,...]}]
+let families = [];
+let expenses = [];
 let displayCur = 'JPY';
 let inputCur = 'USD';
 let memberCat = 'adult';
 let nextId = 1;
 let editingId = null;
 let editInputCur = 'JPY';
+let tripName = '';
 
 function uid() { return nextId++; }
 
 // ---------- GAS sync ----------
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbyYw087-3W0ErVxBokHdJvNsezyXJSunBaT0Yon5Ojz1M_pFra1u3pbG6jU2gxyvyMo/exec';
-const STORAGE_KEY = 'travel_expense_v1';
 let syncTimer = null;
 let isSyncing = false;
 
@@ -347,18 +439,17 @@ function setStatus(msg, isError) {
 }
 
 async function saveData() {
-  // localStorageにも保存（オフライン時のフォールバック）
+  if (!TRIP_ID) return;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ families, expenses, displayCur, nextId }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ families, expenses, displayCur, nextId, tripName }));
   } catch(e) {}
 
-  // GASへの保存はdebounce（連続操作時に負荷をかけない）
   clearTimeout(syncTimer);
   syncTimer = setTimeout(async () => {
     setStatus('保存中...');
     try {
-      const payload = JSON.stringify({ families, expenses, displayCur, nextId });
-      await fetch(GAS_URL + '?action=save&payload=' + encodeURIComponent(payload));
+      const payload = JSON.stringify({ families, expenses, displayCur, nextId, tripName });
+      await fetch(GAS_URL + '?action=save&trip=' + encodeURIComponent(TRIP_ID) + '&payload=' + encodeURIComponent(payload));
       setStatus('保存済み ✓');
     } catch(e) {
       setStatus('オフライン（ローカル保存済み）', true);
@@ -367,7 +458,15 @@ async function saveData() {
 }
 
 async function loadData() {
-  // まずlocalStorageから即時表示
+  if (!TRIP_ID) return;
+
+  // 旅行作成直後の名前を引き継ぐ
+  const pending = sessionStorage.getItem('trip_name_' + TRIP_ID);
+  if (pending) {
+    tripName = pending;
+    sessionStorage.removeItem('trip_name_' + TRIP_ID);
+  }
+
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
@@ -376,14 +475,14 @@ async function loadData() {
       expenses = d.expenses || [];
       displayCur = d.displayCur || 'JPY';
       nextId = d.nextId || 1;
+      if (d.tripName) tripName = d.tripName;
       render();
     }
   } catch(e) {}
 
-  // 次にGASから最新データを取得
   setStatus('同期中...');
   try {
-    const res = await fetch(GAS_URL + '?action=load');
+    const res = await fetch(GAS_URL + '?action=load&trip=' + encodeURIComponent(TRIP_ID));
     const json = await res.json();
     if (json.ok && json.data) {
       const d = JSON.parse(json.data);
@@ -391,11 +490,13 @@ async function loadData() {
       expenses = d.expenses || [];
       displayCur = d.displayCur || 'JPY';
       nextId = d.nextId || 1;
+      if (d.tripName) tripName = d.tripName;
       localStorage.setItem(STORAGE_KEY, json.data);
       render();
       setStatus('同期完了 ✓');
     } else {
       setStatus('新規データ');
+      render();
     }
   } catch(e) {
     setStatus('オフライン（ローカルデータを表示中）', true);
@@ -407,26 +508,26 @@ async function resetData() {
   families = []; expenses = []; displayCur = 'JPY'; nextId = 1;
   localStorage.removeItem(STORAGE_KEY);
   try {
-    await fetch(GAS_URL + '?action=save&payload=' + encodeURIComponent(JSON.stringify({ families, expenses, displayCur, nextId })));
+    await fetch(GAS_URL + '?action=save&trip=' + encodeURIComponent(TRIP_ID) + '&payload=' + encodeURIComponent(JSON.stringify({ families, expenses, displayCur, nextId, tripName })));
   } catch(e) {}
   render();
 }
 
-// 30秒ごとに自動で最新データを取得（他の人が入力した内容を反映）
+// 30秒ごとに自動同期
 setInterval(async () => {
-  if (isSyncing) return;
+  if (isSyncing || !TRIP_ID) return;
   isSyncing = true;
   try {
-    const res = await fetch(GAS_URL + '?action=load');
+    const res = await fetch(GAS_URL + '?action=load&trip=' + encodeURIComponent(TRIP_ID));
     const json = await res.json();
     if (json.ok && json.data) {
       const d = JSON.parse(json.data);
-      // nextIdが増えていたら他の人が更新している
       if (d.nextId > nextId) {
         families = d.families || [];
         expenses = d.expenses || [];
         displayCur = d.displayCur || 'JPY';
         nextId = d.nextId || 1;
+        if (d.tripName) tripName = d.tripName;
         localStorage.setItem(STORAGE_KEY, json.data);
         render();
         setStatus('他のメンバーが更新しました ✓');
@@ -435,6 +536,7 @@ setInterval(async () => {
   } catch(e) {}
   isSyncing = false;
 }, 30000);
+
 function getRate() { return parseFloat(document.getElementById('rate').value) || 160; }
 function toJPY(amount, cur) { return cur === 'USD' ? amount * getRate() : amount; }
 function fmt(amountJPY) {
@@ -453,6 +555,13 @@ function getMember(id) { return allMembers().find(m => m.id === id); }
 function getFamily(id) { return families.find(f => f.id === id); }
 
 // ---------- actions ----------
+function saveTripName() {
+  const val = document.getElementById('trip-name-input').value.trim();
+  if (!val) return;
+  tripName = val;
+  render();
+}
+
 function setCurrency(c) {
   displayCur = c;
   ['jpy','usd','both'].forEach(x => document.getElementById('btn-' + x).classList.remove('active'));
@@ -481,10 +590,7 @@ function addFamily() {
 }
 function removeFamily(id) {
   families = families.filter(f => f.id !== id);
-  expenses = expenses.filter(e => {
-    const payer = getMember(e.payerMemberId);
-    return payer; // remove expenses whose payer no longer exists... 
-  });
+  expenses = expenses.filter(e => getMember(e.payerMemberId));
   render();
 }
 
@@ -524,25 +630,18 @@ function removeExpense(id) { expenses = expenses.filter(e => e.id !== id); rende
 
 // ---------- calculation ----------
 function calcBalances() {
-  // balances per family
   const familyBal = {};
   families.forEach(f => { familyBal[f.id] = 0; });
 
   expenses.forEach(e => {
     const payer = getMember(e.payerMemberId);
     if (!payer) return;
-
-    // total ratio units among participants
     const totalRatio = e.participants.reduce((sum, mid) => {
       const m = getMember(mid);
       return sum + (m ? RATIOS[m.cat] : 0);
     }, 0);
     if (totalRatio === 0) return;
-
-    // credit payer's family
     familyBal[payer.familyId] = (familyBal[payer.familyId] || 0) + e.amountJPY;
-
-    // debit each participant's family proportionally
     e.participants.forEach(mid => {
       const m = getMember(mid);
       if (!m) return;
@@ -577,12 +676,20 @@ function settle(balances) {
 
 // ---------- render ----------
 function render() {
+  renderTripTitle();
   renderFamilies();
   renderPayerSelect();
   renderParticipants();
   renderExpenses();
   renderResult();
   saveData();
+}
+
+function renderTripTitle() {
+  const title = document.getElementById('trip-title');
+  if (title) title.textContent = tripName || '旅行精算';
+  const inp = document.getElementById('trip-name-input');
+  if (inp && document.activeElement !== inp) inp.value = tripName;
 }
 
 function renderFamilies() {
@@ -604,7 +711,6 @@ function renderFamilies() {
       </div>
     </div>`).join('');
 
-  // family select for member add
   const fs = document.getElementById('member-family');
   const prev = fs.value;
   fs.innerHTML = families.map(f => `<option value="${f.id}">${f.name}</option>`).join('');
@@ -614,7 +720,6 @@ function renderFamilies() {
 function renderPayerSelect() {
   const ps = document.getElementById('exp-payer');
   const prev = parseInt(ps.value);
-  const members = allMembers();
   ps.innerHTML = families.map(f =>
     f.members.length
       ? `<optgroup label="${f.name}">${f.members.map(m =>
@@ -629,7 +734,6 @@ function renderParticipants() {
   const prevSel = new Set([...pc.querySelectorAll('.check-chip.selected')].map(c => parseInt(c.dataset.mid)));
   const members = allMembers();
   if (!members.length) { pc.innerHTML = '<span style="font-size:13px;color:var(--text-hint)">先にメンバーを追加してください</span>'; return; }
-
   pc.innerHTML = families.map(f => {
     if (!f.members.length) return '';
     return `<span style="font-size:11px;color:var(--text-muted);display:block;margin:6px 0 2px;width:100%">${f.name}</span>` +
@@ -652,7 +756,6 @@ function renderExpenses() {
     }).join('、');
     const isEditing = editingId === e.id;
 
-    // 編集フォーム内の支払者セレクト
     const payerOptions = families.map(f =>
       f.members.length
         ? `<optgroup label="${f.name}">${f.members.map(m =>
@@ -661,7 +764,6 @@ function renderExpenses() {
         : ''
     ).join('');
 
-    // 編集フォーム内の参加者チップ
     const participantChips = families.map(f => {
       if (!f.members.length) return '';
       return `<span style="font-size:11px;color:var(--text-muted);display:block;margin:6px 0 2px;width:100%">${f.name}</span>` +
@@ -672,7 +774,6 @@ function renderExpenses() {
         ).join('');
     }).join('');
 
-    // 編集フォームの初期金額（現在の editInputCur に合わせて逆算）
     const editAmountInit = editInputCur === 'USD'
       ? (e.amountJPY / getRate()).toFixed(2)
       : e.amountJPY.toFixed(0);
@@ -734,11 +835,8 @@ function setEditInputCur(cur, id) {
   const field = document.getElementById(`edit-amount-${id}`);
   const val = parseFloat(field.value) || 0;
   const rate = getRate();
-  if (cur === 'USD' && editInputCur === 'JPY') {
-    field.value = (val / rate).toFixed(2);
-  } else if (cur === 'JPY' && editInputCur === 'USD') {
-    field.value = Math.round(val * rate);
-  }
+  if (cur === 'USD' && editInputCur === 'JPY') field.value = (val / rate).toFixed(2);
+  else if (cur === 'JPY' && editInputCur === 'USD') field.value = Math.round(val * rate);
   editInputCur = cur;
   document.getElementById(`edit-btn-usd-${id}`).classList.toggle('active', cur === 'USD');
   document.getElementById(`edit-btn-jpy-${id}`).classList.toggle('active', cur === 'JPY');
@@ -768,7 +866,6 @@ function saveEditExpense(id) {
 function renderResult() {
   const total = expenses.reduce((s, e) => s + e.amountJPY, 0);
   const totalMembers = allMembers().length;
-  const totalRatioUnits = allMembers().reduce((s, m) => s + RATIOS[m.cat], 0);
 
   document.getElementById('summary-grid').innerHTML = `
     <div class="metric"><div class="metric-label">合計支出</div><div class="metric-value">${fmt(total)}</div></div>
@@ -796,9 +893,9 @@ function renderResult() {
     </div>`).join('');
 }
 
-loadData().then(() => {
-  setCurrency(displayCur);
-});
+if (TRIP_ID) {
+  loadData().then(() => { setCurrency(displayCur); });
+}
 </script>
 </body>
 </html>
