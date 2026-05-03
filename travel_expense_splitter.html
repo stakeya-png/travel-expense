@@ -202,6 +202,17 @@
   .divider { border: none; border-top: 0.5px solid var(--border); margin: 10px 0; }
   .add-member-row { display: flex; gap: 6px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
 
+  /* 支払い・使用金額リスト */
+  .stat-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 0.5px solid var(--border); }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-name { font-size: 13px; }
+  .stat-sub { font-size: 11px; color: var(--text-muted); margin-left: 4px; }
+  .stat-amount { font-size: 14px; font-weight: 600; white-space: nowrap; }
+  .stat-bar-wrap { height: 4px; background: var(--surface3); border-radius: 2px; margin-top: 4px; }
+  .stat-bar { height: 4px; border-radius: 2px; background: var(--info-text); transition: width 0.3s; }
+  .family-stat-header { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 10px 0 4px; }
+  .family-stat-header:first-child { margin-top: 0; }
+
   /* ランディングページ */
   .landing-hero { text-align: center; padding: 2rem 0 1.5rem; }
   .landing-hero h1 { font-size: 28px; margin-bottom: 8px; }
@@ -349,6 +360,28 @@
     <div class="card-title">精算結果（家族単位）</div>
     <div class="summary-grid" id="summary-grid"></div>
     <div id="result-list"><div class="empty">家族・メンバーと支払いを入力してください</div></div>
+  </div>
+
+  <!-- ① 各人の支払い累計 -->
+  <div class="card">
+    <div class="card-header" id="hdr-person-pay" onclick="toggleCard('person-pay')">
+      <div class="card-title">各人の支払い累計</div>
+      <span class="chevron open">▼</span>
+    </div>
+    <div class="card-body" id="body-person-pay">
+      <div id="person-payments-list"><div class="empty">支払いデータがありません</div></div>
+    </div>
+  </div>
+
+  <!-- ② 各家族の使用金額 -->
+  <div class="card">
+    <div class="card-header" id="hdr-family-usage" onclick="toggleCard('family-usage')">
+      <div class="card-title">各家族の使用金額</div>
+      <span class="chevron open">▼</span>
+    </div>
+    <div class="card-body" id="body-family-usage">
+      <div id="family-usage-list"><div class="empty">支払いデータがありません</div></div>
+    </div>
   </div>
 
   <!-- 初期化（危険ゾーン） -->
@@ -682,7 +715,84 @@ function render() {
   renderParticipants();
   renderExpenses();
   renderResult();
+  renderPersonPayments();
+  renderFamilyUsage();
   saveData();
+}
+
+function renderPersonPayments() {
+  const el = document.getElementById('person-payments-list');
+  if (!el) return;
+  if (!expenses.length || !families.length) {
+    el.innerHTML = '<div class="empty">支払いデータがありません</div>'; return;
+  }
+
+  // 各メンバーの支払い累計
+  const paid = {};
+  allMembers().forEach(m => { paid[m.id] = 0; });
+  expenses.forEach(e => {
+    if (paid[e.payerMemberId] !== undefined) paid[e.payerMemberId] += e.amountJPY;
+  });
+
+  const maxPaid = Math.max(...Object.values(paid), 1);
+
+  el.innerHTML = families.map(f => {
+    if (!f.members.length) return '';
+    const rows = f.members.map(m => {
+      const amt = paid[m.id] || 0;
+      const pct = (amt / maxPaid * 100).toFixed(1);
+      return `
+        <div class="stat-row">
+          <div style="flex:1;min-width:0">
+            <div class="stat-name">${m.name}<span class="stat-sub">（${CAT_LABEL[m.cat]}）</span></div>
+            <div class="stat-bar-wrap"><div class="stat-bar" style="width:${pct}%"></div></div>
+          </div>
+          <div class="stat-amount" style="margin-left:12px">${fmt(amt)}</div>
+        </div>`;
+    }).join('');
+    return `<div class="family-stat-header">${f.name}</div>${rows}`;
+  }).join('');
+}
+
+function renderFamilyUsage() {
+  const el = document.getElementById('family-usage-list');
+  if (!el) return;
+  if (!expenses.length || !families.length) {
+    el.innerHTML = '<div class="empty">支払いデータがありません</div>'; return;
+  }
+
+  // 各家族の按分消費額
+  const usage = {};
+  families.forEach(f => { usage[f.id] = 0; });
+  expenses.forEach(e => {
+    const totalRatio = e.participants.reduce((sum, mid) => {
+      const m = getMember(mid);
+      return sum + (m ? RATIOS[m.cat] : 0);
+    }, 0);
+    if (totalRatio === 0) return;
+    e.participants.forEach(mid => {
+      const m = getMember(mid);
+      if (!m) return;
+      usage[m.familyId] = (usage[m.familyId] || 0) + e.amountJPY * RATIOS[m.cat] / totalRatio;
+    });
+  });
+
+  const total = Object.values(usage).reduce((s, v) => s + v, 0);
+  const maxUsage = Math.max(...Object.values(usage), 1);
+
+  el.innerHTML = families.map(f => {
+    const amt = usage[f.id] || 0;
+    const pct = total > 0 ? (amt / total * 100).toFixed(1) : '0.0';
+    const barPct = (amt / maxUsage * 100).toFixed(1);
+    return `
+      <div class="stat-row">
+        <div style="flex:1;min-width:0">
+          <div class="stat-name">${f.name}<span class="stat-sub">${pct}%</span></div>
+          <div class="stat-bar-wrap"><div class="stat-bar" style="width:${barPct}%;background:var(--success-text)"></div></div>
+        </div>
+        <div class="stat-amount" style="margin-left:12px">${fmt(amt)}</div>
+      </div>`;
+  }).join('');
 }
 
 function renderTripTitle() {
