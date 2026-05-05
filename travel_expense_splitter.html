@@ -482,7 +482,11 @@ async function saveData() {
     setStatus('保存中...');
     try {
       const payload = JSON.stringify({ families, expenses, displayCur, nextId, tripName });
-      await fetch(GAS_URL + '?action=save&trip=' + encodeURIComponent(TRIP_ID) + '&payload=' + encodeURIComponent(payload));
+      await fetch(GAS_URL + '?action=save&trip=' + encodeURIComponent(TRIP_ID), {
+        method: 'POST',
+        mode: 'no-cors',
+        body: payload
+      });
       setStatus('保存済み ✓');
     } catch(e) {
       setStatus('オフライン（ローカル保存済み）', true);
@@ -541,7 +545,11 @@ async function resetData() {
   families = []; expenses = []; displayCur = 'JPY'; nextId = 1;
   localStorage.removeItem(STORAGE_KEY);
   try {
-    await fetch(GAS_URL + '?action=save&trip=' + encodeURIComponent(TRIP_ID) + '&payload=' + encodeURIComponent(JSON.stringify({ families, expenses, displayCur, nextId, tripName })));
+    await fetch(GAS_URL + '?action=save&trip=' + encodeURIComponent(TRIP_ID), {
+      method: 'POST',
+      mode: 'no-cors',
+      body: JSON.stringify({ families, expenses, displayCur, nextId, tripName })
+    });
   } catch(e) {}
   render();
 }
