@@ -1024,11 +1024,8 @@ async function createSpreadsheet() {
   btn.textContent = '作成中...';
   btn.disabled = true;
   try {
-    const payload = JSON.stringify({ families, expenses, tripName, rate: getRate() });
-    const res = await fetch(GAS_URL + '?action=createSheet&trip=' + encodeURIComponent(TRIP_ID), {
-      method: 'POST',
-      body: payload
-    });
+    // GASのCORS制限を回避するためGETで呼び出す（データはGAS側に保存済み）
+    const res = await fetch(GAS_URL + '?action=createSheet&trip=' + encodeURIComponent(TRIP_ID));
     const json = await res.json();
     if (json.ok && json.url) {
       linkEl.href = json.url;

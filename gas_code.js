@@ -27,7 +27,24 @@ function doGet(e) {
     return output({ ok: false });
   }
 
-  return output({ ok: false, error: 'use POST for save/createSheet' });
+  // スプレッドシート生成（GETで対応 - POSTのCORS制限を回避）
+  if (action === 'createSheet') {
+    const values = sheet.getDataRange().getValues();
+    for (let i = 0; i < values.length; i++) {
+      if (String(values[i][0]) === tripId) {
+        try {
+          const data = JSON.parse(values[i][1]);
+          const url = buildSpreadsheet(data);
+          return output({ ok: true, url: url });
+        } catch(err) {
+          return output({ ok: false, error: err.toString() });
+        }
+      }
+    }
+    return output({ ok: false, error: 'trip not found' });
+  }
+
+  return output({ ok: false, error: 'unknown action' });
 }
 
 // POSTリクエスト：セーブ・スプレッドシート生成
@@ -72,18 +89,9 @@ function buildSpreadsheet(data) {
   const rate = data.rate || 160;
   const RATIOS = { adult: 10, teen: 7, child: 5 };
 
-  // スプレッドシートを取得 or 作成
+  // スプレッドシートを新規作成
   const fileName = tripName + ' 精算一覧';
-  let ss;
-  const files = DriveApp.getFilesByName(fileName);
-  if (files.hasNext()) {
-    ss = SpreadsheetApp.openById(files.next().getId());
-    const s = ss.getSheets()[0];
-    s.clearContents();
-    s.clearFormats();
-  } else {
-    ss = SpreadsheetApp.create(fileName);
-  }
+  const ss = SpreadsheetApp.create(fileName);
   const sheet = ss.getSheets()[0];
   sheet.setName('精算一覧');
 
