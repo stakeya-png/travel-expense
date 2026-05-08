@@ -1015,31 +1015,13 @@ function renderResult() {
     </div>`).join('');
 }
 
-async function createSpreadsheet() {
+function createSpreadsheet() {
   if (!expenses.length || !families.length) {
     alert('支払いデータがありません'); return;
   }
-  const btn = document.getElementById('create-sheet-btn');
-  const linkEl = document.getElementById('sheet-link');
-  btn.textContent = '作成中...';
-  btn.disabled = true;
-  try {
-    // GASのCORS制限を回避するためGETで呼び出す（データはGAS側に保存済み）
-    const res = await fetch(GAS_URL + '?action=createSheet&trip=' + encodeURIComponent(TRIP_ID));
-    const json = await res.json();
-    if (json.ok && json.url) {
-      linkEl.href = json.url;
-      linkEl.style.display = '';
-      btn.textContent = 'スプレッドシートを更新';
-    } else {
-      alert('作成に失敗しました: ' + (json.error || '不明なエラー'));
-      btn.textContent = 'スプレッドシートに書き出す';
-    }
-  } catch(err) {
-    alert('エラーが発生しました: ' + err.message);
-    btn.textContent = 'スプレッドシートに書き出す';
-  }
-  btn.disabled = false;
+  // 新しいタブでGASを開く（CORS制限を完全に回避）
+  // GAS側でスプレッドシートを作成してそのURLにリダイレクトする
+  window.open(GAS_URL + '?action=createSheet&trip=' + encodeURIComponent(TRIP_ID), '_blank');
 }
 
 if (TRIP_ID) {

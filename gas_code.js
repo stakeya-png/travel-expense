@@ -27,7 +27,7 @@ function doGet(e) {
     return output({ ok: false });
   }
 
-  // スプレッドシート生成（GETで対応 - POSTのCORS制限を回避）
+  // スプレッドシート生成（新タブ方式 - CORS不要）
   if (action === 'createSheet') {
     const values = sheet.getDataRange().getValues();
     for (let i = 0; i < values.length; i++) {
@@ -35,13 +35,20 @@ function doGet(e) {
         try {
           const data = JSON.parse(values[i][1]);
           const url = buildSpreadsheet(data);
-          return output({ ok: true, url: url });
+          // スプレッドシートへリダイレクト
+          return HtmlService.createHtmlOutput(
+            '<html><head><meta charset="UTF-8"></head><body>' +
+            '<p>スプレッドシートを作成しました。</p>' +
+            '<a href="' + url + '">クリックして開く</a>' +
+            '<script>window.location.href="' + url + '";</script>' +
+            '</body></html>'
+          );
         } catch(err) {
-          return output({ ok: false, error: err.toString() });
+          return HtmlService.createHtmlOutput('エラー: ' + err.toString());
         }
       }
     }
-    return output({ ok: false, error: 'trip not found' });
+    return HtmlService.createHtmlOutput('データが見つかりませんでした。先にデータを保存してください。');
   }
 
   return output({ ok: false, error: 'unknown action' });
