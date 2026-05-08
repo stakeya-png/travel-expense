@@ -360,6 +360,10 @@
     <div class="card-title">精算結果（家族単位）</div>
     <div class="summary-grid" id="summary-grid"></div>
     <div id="result-list"><div class="empty">家族・メンバーと支払いを入力してください</div></div>
+    <div style="margin-top:14px;padding-top:12px;border-top:0.5px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <button class="btn" id="create-sheet-btn" onclick="createSpreadsheet()">スプレッドシートに書き出す</button>
+      <a id="sheet-link" href="#" target="_blank" style="display:none;font-size:13px;color:var(--info-text)">スプレッドシートを開く →</a>
+    </div>
   </div>
 
   <!-- ① 各人の支払い累計 -->
@@ -1009,6 +1013,36 @@ function renderResult() {
       </div>
       <div class="settle-pay-amount">${fmt(t.amount)}</div>
     </div>`).join('');
+}
+
+async function createSpreadsheet() {
+  if (!expenses.length || !families.length) {
+    alert('支払いデータがありません'); return;
+  }
+  const btn = document.getElementById('create-sheet-btn');
+  const linkEl = document.getElementById('sheet-link');
+  btn.textContent = '作成中...';
+  btn.disabled = true;
+  try {
+    const payload = JSON.stringify({ families, expenses, tripName, rate: getRate() });
+    const res = await fetch(GAS_URL + '?action=createSheet&trip=' + encodeURIComponent(TRIP_ID), {
+      method: 'POST',
+      body: payload
+    });
+    const json = await res.json();
+    if (json.ok && json.url) {
+      linkEl.href = json.url;
+      linkEl.style.display = '';
+      btn.textContent = 'スプレッドシートを更新';
+    } else {
+      alert('作成に失敗しました: ' + (json.error || '不明なエラー'));
+      btn.textContent = 'スプレッドシートに書き出す';
+    }
+  } catch(err) {
+    alert('エラーが発生しました: ' + err.message);
+    btn.textContent = 'スプレッドシートに書き出す';
+  }
+  btn.disabled = false;
 }
 
 if (TRIP_ID) {
